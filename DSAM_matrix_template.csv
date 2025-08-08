@@ -1,0 +1,7 @@
+age_band,sex,smoker,ldl_band,sbp_band,score2_pct
+40-44,F,Non-smoker,2.2-3.1,120-139,1.0
+40-44,F,Non-smoker,2.2-3.1,140-159,2.0
+40-44,F,Smoker,2.2-3.1,120-139,2.0
+50-54,M,Non-smoker,3.2-4.1,140-159,5.0
+50-54,M,Smoker,3.2-4.1,160-179,9.0
+# Extend with full matrix based on DSAM figure
