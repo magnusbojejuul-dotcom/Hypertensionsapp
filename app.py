@@ -48,7 +48,7 @@ with st.sidebar:
 # DATA (SCORE2 CSV’er – cache)
 # =========================
 @st.cache_data
-def load_csv_or_none(path):
+def load_csv_or_none(path: str) -> Optional[pd.DataFrame]:
     try:
         return pd.read_csv(path)
     except Exception:
@@ -85,7 +85,7 @@ def clamp(v: float, lo: float, hi: float) -> float:
     return max(lo, min(hi, v))
 
 def age_adjusted_refs(age: int) -> Dict[str, Tuple[float, float]]:
-    # Pædagogisk, enkel aldersjustering
+    # Enkel, pædagogisk aldersjustering (kan tilpasses lokale referencer)
     na_low, na_high = 137.0, 145.0
     k_low, k_high = 3.5, 5.0
     egfr_high = 120.0
@@ -154,7 +154,6 @@ def calculate_score2(age: int, sex_label: str, sbp: float, tc: float, hdl: float
     scale1 = float(base.iloc[0]["scale1"])
     scale2 = float(base.iloc[0]["scale2"])
 
-    # uncalibrated + calibration (ESC)
     try:
         risk_uncal = 1.0 - math.exp(math.log(s0) * math.exp(lp))
         risk_uncal = clamp(risk_uncal, 1e-9, 0.999999)
@@ -280,6 +279,21 @@ with rc2:
     ridx = {"green":"🟢","orange":"🟠","red":"🔴","gray":"⚪"}.get(color,"🟢")
     st.markdown(f"### {ridx} {cat}")
 
+# Visuel risikoskala (HTML)
+marker = max(0.0, min(100.0, float(score2_final)))
+risk_html = f"""
+<div style="margin-top:6px;">
+  <div style="height:14px; background: linear-gradient(90deg,#2ecc71,#f1c40f,#e67e22,#e74c3c); border-radius:7px; position:relative;">
+    <div title="SCORE2 {score2_final:.1f}%" style="position:absolute; left: calc({marker}% - 6px); top:-4px; width:0; height:0;
+      border-left:6px solid transparent; border-right:6px solid transparent; border-bottom:8px solid #2c3e50;"></div>
+  </div>
+  <div style="display:flex; justify-content:space-between; font-size:12px; color:#666;">
+    <span>0%</span><span>5%</span><span>10%</span><span>15%</span><span>20%+</span>
+  </div>
+</div>
+"""
+st.markdown(risk_html, unsafe_allow_html=True)
+
 if diabetes:
     st.warning(
         "**Bemærk: SCORE2 er ikke tiltænkt personer med diabetes.**\n\n"
@@ -293,42 +307,42 @@ if diabetes:
 st.header("4) Andre samtidige præparater — interaktionstjek")
 st.caption("Marker hvis patienten får følgende (kan påvirke valg af BT-behandling).")
 icol1, icol2, icol3 = st.columns(3)
-interaction_state = {}
+interaction_state: Dict[str, bool] = {}
 for i, drug in enumerate(INTERACTION_DEFS.keys()):
     with [icol1, icol2, icol3][i % 3]:
         interaction_state[drug] = st.checkbox(drug, value=False)
 
 # =========================
-# Indikation for behandling (konservativ vs farmakologisk) & forslag
+# Indikation for behandling & forslag (konservativ vs farmakologisk)
 # =========================
 
 # Doser/handelsnavne (typiske DK-startdoser; check altid pro.medicin.dk ved ordination)
 DRUGS = {
     "ACE": [
-        {"name": "Perindopril (Coversyl®)", "dose": "2 mg x 1"},
-        {"name": "Ramipril (Tritace®)", "dose": "2,5 mg x 1"},
+        {"name": "Perindopril (Coversyl®)", "dose": "2 mg x 1", "rationale": "RAAS-hæmning: BT-sænkning og nyre-/kardio-beskyttelse; førstevalg ved diabetes/albuminuri/CKD."},
+        {"name": "Ramipril (Tritace®)", "dose": "2,5 mg x 1", "rationale": "ACE-alternativ; titrér efter effekt og nyretal/K⁺."},
     ],
     "ARB": [
-        {"name": "Candesartan (Atacand®)", "dose": "8 mg x 1"},
-        {"name": "Losartan (Cozaar®)", "dose": "50 mg x 1"},
+        {"name": "Candesartan (Atacand®)", "dose": "8 mg x 1", "rationale": "Alternativ til ACE ved hoste/intolerans; god kombinationspartner til CCB/tiazid."},
+        {"name": "Losartan (Cozaar®)", "dose": "50 mg x 1", "rationale": "ARB-alternativ; kan overvejes ved urinsyreproblematik pga. urikosurisk effekt."},
     ],
     "CCB_DHP": [
-        {"name": "Amlodipin (Norvasc®)", "dose": "5 mg x 1"},
+        {"name": "Amlodipin (Norvasc®)", "dose": "5 mg x 1", "rationale": "Effektiv ved systolisk HT, især hos ældre; kan give ankelødem – mindskes ved kombination med RAAS-blokade."},
     ],
     "THIAZIDE_LIKE": [
-        {"name": "Indapamid (Natrilix SR®)", "dose": "1,5 mg x 1"},
-        {"name": "Chlortalidon (Chlortalidon®)", "dose": "12,5 mg x 1"},
+        {"name": "Indapamid (Natrilix SR®)", "dose": "1,5 mg x 1", "rationale": "God 24-timers effekt; monitorér Na⁺/K⁺; undgå ved hyponatriæmi og eGFR <30."},
+        {"name": "Chlortalidon (Chlortalidon®)", "dose": "12,5 mg x 1", "rationale": "Langtidsvirkende; effektivt i kombination; pas på Na⁺/K⁺ og urat."},
     ],
     "BETA": [
-        {"name": "Metoprolol dep. (Selo-Zok®)", "dose": "25–50 mg x 1"},
+        {"name": "Metoprolol dep. (Selo-Zok®)", "dose": "25–50 mg x 1", "rationale": "Ved angina/AF/HF-indikation; undgå ikke-selektive ved astma/COPD."},
     ],
     "MRA": [
-        {"name": "Spironolakton (Spiron®)", "dose": "25 mg x 1"},
+        {"name": "Spironolakton (Spiron®)", "dose": "25 mg x 1", "rationale": "Ved resistent HT; monitorér K⁺/kreatinin; undgå ved hyperkaliæmi."},
     ],
     "PREG": [
-        {"name": "Labetalol (Trandate®)", "dose": "100–200 mg x 2"},
-        {"name": "Nifedipin dep. (Adalat®/Nifedipin®)", "dose": "30 mg x 1"},
-        {"name": "Methyldopa (Aldomet®)", "dose": "250 mg x 2–3"},
+        {"name": "Labetalol (Trandate®)", "dose": "100–200 mg x 2", "rationale": "Førstevalg i graviditet; undgå RAAS/MRA."},
+        {"name": "Nifedipin dep. (Adalat®/Nifedipin®)", "dose": "30 mg x 1", "rationale": "Sikkert alternativ i graviditet."},
+        {"name": "Methyldopa (Aldomet®)", "dose": "250 mg x 2–3", "rationale": "Erfaring ved graviditet; kan give træthed."},
     ],
 }
 
@@ -359,16 +373,12 @@ def sbp_grade(sbp_val: float) -> str:
 def indication_for_treatment(sbp_val: float, score2_pct: float, high_risk_flags: bool) -> Tuple[str, str]:
     """
     Returnerer ('Conservative'/'Pharmacologic', begrundelse)
-    Regler (for overskuelighed – pædagogisk):
-      - SBP >=160: farmakologisk
-      - SBP 140–159: farmakologisk hvis diabetes/CKD/moderat-høj SCORE2; ellers konservativ førstelinje
-      - SBP 130–139: konservativ (med tæt opfølgning), farmakologisk hvis højrisiko (fx SCORE2 høj eller CKD/DM)
     """
     grade = sbp_grade(sbp_val)
     if grade in ("Grad 2", "Grad 3"):
         return "Pharmacologic", f"{grade}: behandlingsindikation."
     if grade == "Grad 1":
-        if high_risk_flags or score2_pct >= 7.5:  # tærskel justeret m. risiko (pædagogisk)
+        if high_risk_flags or score2_pct >= 7.5:
             return "Pharmacologic", "Grad 1 + forhøjet risiko/komorbiditet: behandlingsindikation."
         else:
             return "Conservative", "Grad 1 uden højrisiko: start livsstilsintervention og tæt kontrol."
@@ -395,124 +405,104 @@ def build_recommendation(
     score2_pct: float,
     interactions_checked: Dict[str, bool],
 ) -> Dict[str, List[Dict[str, str]]]:
-    """
-    Returnerer dict med nøgler:
-      - 'conservative': liste af råd (dict med 'text')
-      - 'firstline': liste af lægemidler (dict m. 'name','dose','note')
-      - 'avoid': liste af advarsler (dict m. 'text')
-      - 'rationale': liste af begrundelser (dict m. 'text')
-      - 'planb': alternative forslag ved kontraindikation
-    """
-    out = {"conservative": [], "firstline": [], "avoid": [], "rationale": [], "planb": []}
+    out = {"conservative": [], "firstline": [], "avoid": [], "rationale": [], "planb": [], "flow": []}
     grade = sbp_grade(sbp_val)
-
-    # ---- Risiko/komorbiditeter -> high_risk_flags
     high_risk_flags = any([diabetes_flag, ckd_flag, proteinuria_flag, heart_failure_flag, cad_flag, af_flag])
     mode, why = indication_for_treatment(sbp_val, score2_pct, high_risk_flags)
-    out["rationale"].append({"text": f"BT-grad: {grade}. {why}"})
+    out["rationale"].append({"text": f"BT-grad: **{grade}**. {why}"})
 
-    # ---- Interaktioner (andre præparater)
+    # FLOW-diagram (trin)
+    out["flow"].append("Konservativ")
+    if mode == "Pharmacologic":
+        if sbp_val >= 160 or (sbp_val >= 140 and (diabetes_flag or ckd_flag or proteinuria_flag or score2_pct >= 10.0)):
+            out["flow"].append("Kombination")
+        else:
+            out["flow"].append("Monoterapi")
+        if sbp_val >= 160:
+            out["flow"].append("+ MRA ved resistens")
+
+    # Interaktioner
     for drug, on in interactions_checked.items():
         if not on:
             continue
         entry = INTERACTION_DEFS.get(drug, {})
-        why_i = entry.get("why")
         if "avoid" in entry:
-            out["avoid"].append({"text": f"Interaktion ({drug}): undgå {', '.join(entry['avoid'])}."})
+            out["avoid"].append({"text": f"Interaktion ({drug}): undgå {', '.join(entry['avoid'])}.", "why": entry.get("why","")})
         if "caution" in entry:
-            out["avoid"].append({"text": f"Interaktion ({drug}): forsigtighed med {', '.join(entry['caution'])}."})
-        if why_i:
-            out["rationale"].append({"text": f"Interaktion ({drug}): {why_i}"})
+            out["avoid"].append({"text": f"Interaktion ({drug}): forsigtighed med {', '.join(entry['caution'])}.", "why": entry.get("why","")})
+        if entry.get("why"):
+            out["rationale"].append({"text": f"Interaktion ({drug}): {entry['why']}"})
 
-    # ---- Labs/kliniske flags -> kontraindikationer
+    # Labs/kliniske flags -> kontraindikationer
     if has_hyperkalemia(k_val):
-        out["avoid"].append({"text": "Hyperkaliæmi: undgå ACE/ARB/MRA indtil korrigeret."})
+        out["avoid"].append({"text": "Hyperkaliæmi: undgå ACE/ARB/MRA indtil korrigeret.", "why": "Risiko for alvorlig K⁺-stigning."})
     if has_hyponatremia(na_val):
-        out["avoid"].append({"text": "Hyponatriæmi: undgå tiazid-lignende diuretika."})
+        out["avoid"].append({"text": "Hyponatriæmi: undgå tiazid-lignende diuretika.", "why": "Forværrer Na⁺-tab."})
     if egfr_low(egfr_val):
-        out["avoid"].append({"text": "eGFR <30: tiazid-lignende ineffektiv; MRA med forsigtighed (overvej loop-diuretikum ved volumenoverload)."})
+        out["avoid"].append({"text": "eGFR <30: tiazid-lignende ineffektiv; MRA med forsigtighed.", "why": "Nedsat effekt/radikseret udskillelse."})
     if gout_risk(urate_val, gout_flag):
-        out["avoid"].append({"text": "Urinsyregigt/forhøjet urat: undgå tiazid-lignende diuretika."})
+        out["avoid"].append({"text": "Urinsyregigt/forhøjet urat: undgå tiazid-lignende.", "why": "Øger urinsyre."})
     if pregnancy_flag:
-        out["avoid"].append({"text": "Graviditet: undgå ACE/ARB/MRA."})
+        out["avoid"].append({"text": "Graviditet: undgå ACE/ARB/MRA.", "why": "Føtotoksisk risiko."})
 
-    # ---- Konservativ behandling (alltid vurderet)
+    # Konservative råd (vises altid)
     conservative_list = [
-        "Saltreduktion (<5–6 g salt/dag) og kost med grønt/fisk.",
+        "Saltreduktion (<5–6 g/dag) og grønt/fisk-rig kost.",
         "Vægttab ved BMI>25 (mål 5–10%).",
         "Alkoholreduktion (max 7/14 genstande pr. uge Kv/M).",
         "Motion ≥150 min/uge (moderat) + styrke 2×/uge.",
-        "Rygestop og stressreduktion/søvnoptimering.",
-        "Hjemme-BT-kontrol og revurdering om 3–6 mdr.",
+        "Rygestop og stress-/søvnoptimering.",
+        "Hjemme-BT og revurdering om 3–6 mdr.",
     ]
     for t in conservative_list:
         out["conservative"].append({"text": t})
 
-    # ---- Farmakologiske forslag (valg afhænger af kontraindikationer/profil)
-    def allowed_raas():
-        return not (has_hyperkalemia(k_val) or pregnancy_flag)
+    # Tilladt-valg helpers
+    def allowed_raas():   return not (has_hyperkalemia(k_val) or pregnancy_flag)
+    def allowed_thiaz():  return not (has_hyponatremia(na_val) or egfr_low(egfr_val) or gout_risk(urate_val, gout_flag))
+    def allowed_ccb():    return True
 
-    def allowed_thiazide():
-        return not (has_hyponatremia(na_val) or egfr_low(egfr_val) or gout_risk(urate_val, gout_flag))
-
-    def allowed_ccb_dhp():
-        return True  # obs ødemer (note)
-    # Basis-rasionale
+    # Basis-rationale
     if ckd_flag or proteinuria_flag or diabetes_flag:
         out["rationale"].append({"text": "CKD/albuminuri/diabetes: RAAS-blokade anbefales som grundstamme."})
     if heart_failure_flag:
         out["rationale"].append({"text": "Hjertesvigt: ACE/ARB + betablokker ± MRA (HFrEF) – følg HF-vejledning."})
     if edema_flag:
-        out["rationale"].append({"text": "DHP-CCB kan give ankelødem; kombiner evt. med ACE/ARB."})
+        out["rationale"].append({"text": "DHP-CCB kan give ankelødem; kombiner evt. med RAAS-blokade."})
 
-    # Hovedvalg
-    if mode == "Conservative":
-        # Kun konservativ anbefaling som primær; men vis også 'kan overvejes' ved særlige profiler
-        out["rationale"].append({"text": "Primært konservativ behandling valgt ud fra grad/risiko."})
-        # Hvis særlige tilstande (fx CKD/diabetes) kan man dog overveje farmaka:
-        if (diabetes_flag or ckd_flag or proteinuria_flag) and allowed_raas():
-            for d in DRUGS["ACE"]:
-                out["firstline"].append({"name": d["name"], "dose": d["dose"], "note": "Overvej ved CKD/albuminuri/diabetes."})
-    else:
-        # Farmakologisk: valg afhænger af grad/risiko og kontraindikationer
+    # Farmakologisk forslag
+    if mode == "Pharmacologic":
         need_combo = sbp_val >= 160 or (sbp_val >= 140 and (diabetes_flag or ckd_flag or proteinuria_flag or score2_pct >= 10.0))
-        # RAAS som basis hvis muligt
-        if allowed_raas():
-            # ACE som 1. prioritet
-            for d in DRUGS["ACE"]:
-                out["firstline"].append({"name": d["name"], "dose": d["dose"], "note": "Basis."})
-        else:
-            # RAAS kontraindiceret -> CCB/thiazid først
-            if allowed_ccb_dhp():
-                for d in DRUGS["CCB_DHP"]:
-                    out["firstline"].append({"name": d["name"], "dose": d["dose"], "note": "RAAS kontraindiceret."})
-            if allowed_thiazide():
-                for d in DRUGS["THIAZIDE_LIKE"]:
-                    out["firstline"].append({"name": d["name"], "dose": d["dose"], "note": "RAAS kontraindiceret."})
 
-        # Kombinationspartner(e)
-        if need_combo:
-            if allowed_ccb_dhp():
-                for d in DRUGS["CCB_DHP"]:
-                    out["firstline"].append({"name": d["name"], "dose": d["dose"], "note": "Kombinationsbehandling."})
-            if allowed_thiazide():
-                for d in DRUGS["THIAZIDE_LIKE"]:
-                    out["firstline"].append({"name": d["name"], "dose": d["dose"], "note": "Kombinationsbehandling."})
-
-        # Resistent (pædagogisk): overvej MRA hvis K+ tillader
-        if sbp_val >= 160 and allowed_raas() and not has_hyperkalemia(k_val):
-            for d in DRUGS["MRA"]:
-                out["planb"].append({"text": f"Resistent HT: overvej {d['name']} {d['dose']} (monitorér K+/kreatinin)."})
-
-        # Graviditet – erstat med sikre midler
         if pregnancy_flag:
-            out["firstline"].clear()
             for d in DRUGS["PREG"]:
-                out["firstline"].append({"name": d["name"], "dose": d["dose"], "note": "Graviditet – undgå RAAS/MRA."})
+                out["firstline"].append({"name": d["name"], "dose": d["dose"], "note": "Graviditet – undgå RAAS/MRA.", "reason": d["rationale"]})
+        else:
+            # RAAS basis hvis muligt
+            if allowed_raas():
+                for d in DRUGS["ACE"]:
+                    out["firstline"].append({"name": d["name"], "dose": d["dose"], "note": "Basis.", "reason": d["rationale"]})
+            else:
+                # RAAS kontraindiceret → CCB/Tiazid
+                if allowed_ccb():
+                    for d in DRUGS["CCB_DHP"]:
+                        out["firstline"].append({"name": d["name"], "dose": d["dose"], "note": "RAAS kontraindiceret.", "reason": d["rationale"]})
+                if allowed_thiaz():
+                    for d in DRUGS["THIAZIDE_LIKE"]:
+                        out["firstline"].append({"name": d["name"], "dose": d["dose"], "note": "RAAS kontraindiceret.", "reason": d["rationale"]})
 
-    # Astma/COPD note ved beta-blokkere
-    if asthma_copd_flag:
-        out["avoid"].append({"text": "Astma/COPD: undgå ikke-selektive beta-blokkere; overvej selektive ved indikation."})
+            if need_combo:
+                if allowed_ccb():
+                    for d in DRUGS["CCB_DHP"]:
+                        out["firstline"].append({"name": d["name"], "dose": d["dose"], "note": "Kombinationsbehandling.", "reason": d["rationale"]})
+                if allowed_thiaz():
+                    for d in DRUGS["THIAZIDE_LIKE"]:
+                        out["firstline"].append({"name": d["name"], "dose": d["dose"], "note": "Kombinationsbehandling.", "reason": d["rationale"]})
+
+            # Resistent – MRA
+            if sbp_val >= 160 and allowed_raas() and not has_hyperkalemia(k_val):
+                for d in DRUGS["MRA"]:
+                    out["planb"].append({"text": f"Overvej {d['name']} {d['dose']} (monitorér K⁺/kreatinin).", "why": d["rationale"]})
 
     return out, mode, grade
 
@@ -538,21 +528,44 @@ recommendation, mode, grade = build_recommendation(
 )
 
 # =========================
-# VISNING: Anbefalingskort
+# VISNING: Anbefalingskort (grad + begrundelser øverst)
 # =========================
 st.header("5) Anbefaling")
-card_col = st.container()
-if mode == "Conservative":
-    st.success("**Konservativ behandling anbefales** (grad/risiko taler for livsstilsintervention).")
-else:
-    st.warning("**Farmakologisk behandling anbefales** (grad/risiko taler for opstart).")
 
-# Førstevalg (lægemidler)
+# Flow-chips
+if recommendation["flow"]:
+    flow_labels = recommendation["flow"]
+    chips = []
+    for lbl in flow_labels:
+        if lbl == "Konservativ":
+            bg = "#27ae60"
+        elif "Kombination" in lbl or "Monoterapi" in lbl:
+            bg = "#f39c12"
+        elif "MRA" in lbl:
+            bg = "#c0392b"
+        else:
+            bg = "#7f8c8d"
+        chips.append(f"<span style='background:{bg};color:white;padding:4px 8px;border-radius:999px;margin-right:6px;font-size:12px;'>{lbl}</span>")
+    st.markdown(" ".join(chips), unsafe_allow_html=True)
+
+# Headline anbefaling
+if mode == "Conservative":
+    st.success(f"**Hypertension-grad: {grade} — Konservativ behandling anbefales**")
+else:
+    st.warning(f"**Hypertension-grad: {grade} — Farmakologisk behandling anbefales**")
+
+# Begrundelser (op under anbefaling)
+st.subheader("Begrundelser (faglig resonnering)")
+for r in recommendation["rationale"]:
+    st.write(f"- {r['text']}")
+
+# Førstevalg (lægemidler) med faglig note
 st.subheader("Førstevalg (stof + handelsnavn + startdosis)")
 if recommendation["firstline"]:
     for d in recommendation["firstline"]:
         note = f" — {d['note']}" if d.get("note") else ""
-        st.write(f"- **{d['name']}** — {d['dose']}{note}")
+        why = f"<div style='font-size:12px;color:#555;margin-left:10px;'>• {d.get('reason','')}</div>" if d.get("reason") else ""
+        st.markdown(f"- **{d['name']}** — {d['dose']}{note}{why}", unsafe_allow_html=True)
 else:
     st.write("- (Ingen specifikke førstevalg – se konservativ behandling/plan nedenfor.)")
 
@@ -561,11 +574,12 @@ st.subheader("Konservativ behandling (livsstilsråd)")
 for r in recommendation["conservative"]:
     st.write(f"- {r['text']}")
 
-# Undgå/forsigtighed
+# Undgå/forsigtighed (med forklaring)
 st.subheader("Undgå / forsigtighed")
 if recommendation["avoid"]:
     for a in recommendation["avoid"]:
-        st.error(f"- {a['text']}")
+        why = f" ({a.get('why')})" if a.get("why") else ""
+        st.error(f"- {a['text']}{why}")
 else:
     st.write("- (Ingen specifikke)")
 
@@ -573,14 +587,20 @@ else:
 st.subheader("Plan B (hvis utilstrækkelig effekt/kontraindikation)")
 if recommendation["planb"]:
     for p in recommendation["planb"]:
-        st.warning(f"- {p['text']}")
+        why = f" ({p.get('why')})" if p.get("why") else ""
+        st.warning(f"- {p['text']}{why}")
 else:
     st.write("- (Ingen)")
 
-# Begrundelser
-st.subheader("Begrundelser (kort)")
-for r in recommendation["rationale"]:
-    st.write(f"- {r['text']}")
+# Kildelinks lige under anbefaling
+st.markdown(
+    """
+    <div style="margin-top:8px; font-size:12px; color:#555;">
+      Evidensgrundlag: <i>cardio.dk</i> (behandlingsalgoritmer), <i>pro.medicin.dk</i> (doser/kontraindikationer), <i>Lægehåndbogen</i> (livsstil/monitorering).
+    </div>
+    """,
+    unsafe_allow_html=True
+)
 
 # =========================
 # SIMULER ÆNDRING
