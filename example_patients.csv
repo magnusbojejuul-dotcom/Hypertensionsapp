@@ -1,0 +1,3 @@
+navn,alder,køn,ryger,sbp,tchol,hdl,diabetes,ckd,proteinuri,cad,hf,af,stroke_tia,gigt,astma_copd,ødem,na,k,egfr,urat
+Eksempel 1,58,Mand,Ja,150,5.8,1.3,Nej,Nej,Nej,Nej,Nej,Nej,Nej,Nej,Nej,Nej,138,4.2,85,0.35
+Eksempel 2,72,Kvinde,Nej,165,6.2,1.1,Ja,Ja,Ja,Ja,Nej,Ja,Nej,Nej,Ja,Ja,137,5.1,40,0.45
